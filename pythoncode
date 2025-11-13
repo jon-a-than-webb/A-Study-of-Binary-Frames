@@ -7,7 +7,7 @@ from array import array
 # gens : list[int] of length 2^d - 1
 # width : total bit-width N = d + C(d,2)
 #
-# Indexing convention for any vector v in F2^N:
+# Indexing convention for vectors in F2^N:
 # - first d bits hold the 'linear' block (an element of F2^d)
 # - next C(d,2) bits hold the 'quadratic' block indexed by pairs (i<j) in lexicographic order
 #
@@ -95,7 +95,7 @@ def shell_sizes(d: int, L: int = 7):
     _bit_is_set = bit_is_set
     _bit_set = bit_set
 
-    # Expand BFS layer-by-layer until radius L (or until frontier empties)
+    # Expand BFS layer-by-layer until distance L (or until all vertices are found)
     for l in range(1, L + 1):
         nxt = array('I')          # Next frontier (initially empty)
         nxt_append = nxt.append
@@ -113,7 +113,7 @@ def shell_sizes(d: int, L: int = 7):
         # Record shell size
         shells[l] = len(nxt)
 
-        # If there are no new vertices, we've hit/passed the diameter; stop early
+        # If there are no new vertices, we've hit the diameter; stop early
         if not nxt:
             break
 
