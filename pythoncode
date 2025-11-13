@@ -1,0 +1,130 @@
+from array import array
+
+# Function that creates the generators for the Cayley graph
+# Input:
+# d : dimension
+# Returns:
+# gens : list[int] of length 2^d - 1
+# width : total bit-width N = d + C(d,2)
+#
+# Indexing convention for any vector v in F2^N:
+# - first d bits hold the 'linear' block (an element of F2^d)
+# - next C(d,2) bits hold the 'quadratic' block indexed by pairs (i<j) in lexicographic order
+#
+# For each nonzero u in F2^d, the generator g(u) flips:
+# - linear block by XOR with u
+# - quadratic bit (i,j) iff u_i = u_j = 1
+
+def generators(d: int):
+
+    # Number of nonzero u in F2^d: m = 2^d - 1
+    m = (1 << d) - 1
+
+    # Map each pair (i<j) to its index inside the quadratic block [0 .. C(d,2)-1]
+    pair_idx = {}
+    t = 0
+    for i in range(d):
+        for j in range(i + 1, d):
+            pair_idx[(i, j)] = t
+            t += 1
+
+    gens = []  # List of generators
+
+    # Iterate u over all nonzero bitmasks of length d, i.e., u in F2^d - {0}
+    for u in range(1, m + 1):
+        lin = u      # Initialize linear block to u
+        quad = 0     # Initialize quadratic block to 0
+
+        # Set quadratic bits
+        for i in range(d):
+            if (u >> i) & 1:              # Check if ith bit equals 1
+                uj = u >> (i + 1)         # jth bits for j>i
+                for j in range(i + 1, d):
+                    if uj & 1:            # If jth bit equals 1, set (i,j)th bit to 1
+                        quad |= (1 << pair_idx[(i, j)])
+                    uj >>= 1              # Advance to the next j
+
+        # Represent generator as an integer
+        gens.append(lin | (quad << d))
+
+    # Total number of coordinates N = d + C(d,2); Cayley graph vertices are elements of F2^N
+    width = d + (d * (d - 1)) // 2
+    return gens, width
+
+
+# Tiny bitset helpers for visited[]
+
+def bit_is_set(bitset: bytearray, idx: int) -> bool:
+    """Return True iff visited[idx] == 1."""
+    return (bitset[idx >> 3] >> (idx & 7)) & 1
+
+def bit_set(bitset: bytearray, idx: int) -> None:
+    """Set visited[idx] = 1."""
+    b = idx >> 3
+    bitset[b] |= (1 << (idx & 7))
+
+# Function that computes shell sizes for the Cayley graph via BFS
+# Inputs:
+# d : dimension
+# L : maximum distance to explore; default = 7
+# Returns:
+# shells : list of length L+1 with shells[l] = number of vertices at distance l from origin
+
+def shell_sizes(d: int, L: int = 7):
+
+    # Build generators
+    gens, width = generators(d)
+
+    # Total number of vertices |V| = 2^N
+    V = 1 << width
+
+    # Allocate visited bitset
+    visited = bytearray((V + 7) // 8)
+
+    # Start from the origin
+    bit_set(visited, 0)
+    curr = array('I', [0])  # Current frontier: only origin initially
+
+    # Prepare result container; shell 0 holds just the origin
+    shells = [0] * (L + 1)
+    shells[0] = 1
+
+    # Hot local bindings
+    _visited = visited
+    _gens = gens
+    _bit_is_set = bit_is_set
+    _bit_set = bit_set
+
+    # Expand BFS layer-by-layer until radius L (or until frontier empties)
+    for l in range(1, L + 1):
+        nxt = array('I')          # Next frontier (initially empty)
+        nxt_append = nxt.append
+
+        # For every vertex v in this layer...
+        for v in curr:
+            # ...visit all neighbors v ^ g (XOR = addition in F2)
+            for g in _gens:
+                w = v ^ g
+
+                if not _bit_is_set(_visited, w):
+                    _bit_set(_visited, w)
+                    nxt_append(w)
+
+        # Record shell size
+        shells[l] = len(nxt)
+
+        # If there are no new vertices, we've hit/passed the diameter; stop early
+        if not nxt:
+            break
+
+        # Move to the next layer
+        curr = nxt
+
+    return shells
+
+
+# Example usage
+# if __name__ == "__main__":
+#     d, L = 5, 5
+#     shells = shell_sizes(d, L)
+#     print(f"d={d}, L={L} -> shells: {shells}")
